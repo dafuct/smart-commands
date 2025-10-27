@@ -42,9 +42,6 @@ jobs:
     - name: Run tests
       run: ./gradlew test
       
-    - name: Run integration tests (if any)
-      run: ./gradlew integrationTest --continue || true
-      
     - name: Generate test report
       uses: dorny/test-reporter@v1
       if: success() || failure()
