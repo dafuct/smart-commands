@@ -54,10 +54,20 @@ jobs:
         
     - name: Check test results
       run: |
-        if [ -f "build/test-results/test/TEST-*.xml" ]; then
+        echo "📁 Checking for test results..."
+        ls -la build/test-results/ || echo "No test-results directory"
+        ls -la build/test-results/test/ || echo "No test directory"
+        
+        if [ -d "build/test-results/test" ] && [ "$(find build/test-results/test -name 'TEST-*.xml' | wc -l)" -gt 0 ]; then
           echo "✅ Tests completed successfully"
           echo "📊 Test results available in artifacts"
+          echo "📋 Found test files:"
+          find build/test-results/test -name 'TEST-*.xml' -exec basename {} \;
         else
           echo "❌ No test results found"
+          echo "🔍 Debug info:"
+          echo "  - test-results directory exists: $([ -d "build/test-results" ] && echo "YES" || echo "NO")"
+          echo "  - test directory exists: $([ -d "build/test-results/test" ] && echo "YES" || echo "NO")"
+          echo "  - XML files found: $(find build/test-results/test -name 'TEST-*.xml' 2>/dev/null | wc -l)"
           exit 1
         fi
