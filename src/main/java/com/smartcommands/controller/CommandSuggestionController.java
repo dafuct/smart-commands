@@ -1,27 +1,15 @@
 package com.smartcommands.controller;
 
+import com.smartcommands.model.CommandSuggestion;
+import com.smartcommands.service.CommandProcessorService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
 import java.util.HashMap;
 import java.util.Map;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
-
-import com.smartcommands.model.CommandSuggestion;
-import com.smartcommands.service.CommandProcessorService;
-
-/**
- * REST Controller for command suggestions and smart commands
- * Provides API endpoints for shell integration and external clients
- */
 @RestController
 @RequestMapping("/api")
 @CrossOrigin(origins = "*")
@@ -29,13 +17,12 @@ public class CommandSuggestionController {
 
     private static final Logger logger = LoggerFactory.getLogger(CommandSuggestionController.class);
 
-    @Autowired
-    private CommandProcessorService commandProcessorService;
+    private final CommandProcessorService commandProcessorService;
 
-    /**
-     * Process a command and return suggestion
-     * Used by shell integration for real-time command processing
-     */
+    public CommandSuggestionController(CommandProcessorService commandProcessorService) {
+        this.commandProcessorService = commandProcessorService;
+    }
+
     @PostMapping("/suggest")
     public ResponseEntity<Map<String, Object>> suggestCommand(@RequestBody Map<String, String> request) {
         try {
@@ -44,7 +31,6 @@ public class CommandSuggestionController {
                 return ResponseEntity.badRequest().body(createErrorResponse("Command cannot be empty"));
             }
 
-            logger.debug("Processing command suggestion request: {}", command);
             CommandSuggestion suggestion = commandProcessorService.processInput(command);
 
             Map<String, Object> response = new HashMap<>();
@@ -63,9 +49,6 @@ public class CommandSuggestionController {
         }
     }
 
-    /**
-     * Process smart command request (natural language to command)
-     */
     @PostMapping("/smart-command")
     public ResponseEntity<Map<String, Object>> processSmartCommand(@RequestBody Map<String, String> request) {
         try {
@@ -74,7 +57,6 @@ public class CommandSuggestionController {
                 return ResponseEntity.badRequest().body(createErrorResponse("Task description cannot be empty"));
             }
 
-            logger.debug("Processing smart command request: {}", task);
             String smartCommandInput = "sc '" + task + "'";
             CommandSuggestion suggestion = commandProcessorService.processInput(smartCommandInput);
 
@@ -94,15 +76,12 @@ public class CommandSuggestionController {
         }
     }
 
-    /**
-     * Get command history
-     */
     @GetMapping("/history")
     public ResponseEntity<Map<String, Object>> getCommandHistory(
             @RequestParam(defaultValue = "10") int limit) {
         try {
             var history = commandProcessorService.getCommandHistory();
-            
+
             Map<String, Object> response = new HashMap<>();
             response.put("history", history.stream().limit(limit).toList());
             response.put("total", history.size());
@@ -117,16 +96,13 @@ public class CommandSuggestionController {
         }
     }
 
-    /**
-     * Search for similar commands in database
-     */
     @GetMapping("/search")
     public ResponseEntity<Map<String, Object>> searchCommands(
             @RequestParam String query,
             @RequestParam(defaultValue = "10") int limit) {
         try {
             var similarCommands = commandProcessorService.findSimilarCommands(query);
-            
+
             Map<String, Object> response = new HashMap<>();
             response.put("query", query);
             response.put("results", similarCommands.stream().limit(limit).toList());
@@ -142,9 +118,6 @@ public class CommandSuggestionController {
         }
     }
 
-    /**
-     * Health check endpoint
-     */
     @GetMapping("/health")
     public ResponseEntity<Map<String, Object>> healthCheck() {
         Map<String, Object> response = new HashMap<>();
@@ -152,32 +125,22 @@ public class CommandSuggestionController {
         response.put("timestamp", System.currentTimeMillis());
         response.put("service", "Smart Commands API");
         response.put("version", "1.0.0");
-        
+
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Get system status
-     */
     @GetMapping("/status")
     public ResponseEntity<Map<String, Object>> getSystemStatus() {
         try {
             Map<String, Object> response = new HashMap<>();
-            
-            // Check Ollama status through CommandProcessorService
+
             boolean ollamaRunning = commandProcessorService.findCommandInDatabase("test").isPresent();
             response.put("ollamaStatus", ollamaRunning ? "Connected" : "Not Connected");
-            
-            // Database status
             response.put("databaseStatus", "Connected");
-            
-            // Service status
             response.put("commandProcessorStatus", "Active");
-            
-            // Server info
             response.put("serverPort", 17020);
             response.put("timestamp", System.currentTimeMillis());
-            
+
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
@@ -187,9 +150,6 @@ public class CommandSuggestionController {
         }
     }
 
-    /**
-     * Validate a command without processing it
-     */
     @PostMapping("/validate")
     public ResponseEntity<Map<String, Object>> validateCommand(@RequestBody Map<String, String> request) {
         try {
@@ -198,12 +158,9 @@ public class CommandSuggestionController {
                 return ResponseEntity.badRequest().body(createErrorResponse("Command cannot be empty"));
             }
 
-            // Simple validation - check if it's a known command pattern
-            boolean isValid = true;
             String suggestion = null;
             String type = "VALID";
 
-            // Common typo patterns
             switch (command.trim().split("\\s+")[0]) {
                 case "lss":
                 case "lsl":
@@ -221,7 +178,6 @@ public class CommandSuggestionController {
                     type = "TYPO_CORRECTION";
                     break;
                 default:
-                    // Check if it's likely a smart command request
                     if (command.startsWith("sc ")) {
                         type = "SMART_COMMAND";
                     }
@@ -230,7 +186,7 @@ public class CommandSuggestionController {
 
             Map<String, Object> response = new HashMap<>();
             response.put("command", command);
-            response.put("valid", isValid && suggestion == null);
+            response.put("valid", suggestion == null);
             response.put("suggestion", suggestion);
             response.put("type", type);
             response.put("timestamp", System.currentTimeMillis());
@@ -244,9 +200,6 @@ public class CommandSuggestionController {
         }
     }
 
-    /**
-     * Helper method to create error responses
-     */
     private Map<String, Object> createErrorResponse(String message) {
         Map<String, Object> error = new HashMap<>();
         error.put("error", true);

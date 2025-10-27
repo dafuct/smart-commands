@@ -1,18 +1,21 @@
 package com.smartcommands.model;
 
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
 /**
  * Represents the parsed structure of a command
- *
  * Examples:
  * - "docker ps -a" -> base: docker, subcommand: ps, flags: [-a]
  * - "git commit -m 'test'" -> base: git, subcommand: commit, flags: [-m], args: ['test']
  * - "ls -la /home" -> base: ls, flags: [-la], args: [/home]
  */
+@Getter
+@EqualsAndHashCode
 public final class CommandStructure {
     private final String rawCommand;
     private final String baseCommand;
@@ -24,28 +27,8 @@ public final class CommandStructure {
         this.rawCommand = builder.rawCommand;
         this.baseCommand = builder.baseCommand;
         this.subcommand = builder.subcommand;
-        this.flags = Collections.unmodifiableList(new ArrayList<>(builder.flags));
-        this.arguments = Collections.unmodifiableList(new ArrayList<>(builder.arguments));
-    }
-
-    public String getRawCommand() {
-        return rawCommand;
-    }
-
-    public String getBaseCommand() {
-        return baseCommand;
-    }
-
-    public String getSubcommand() {
-        return subcommand;
-    }
-
-    public List<String> getFlags() {
-        return flags;
-    }
-
-    public List<String> getArguments() {
-        return arguments;
+        this.flags = List.copyOf(builder.flags);
+        this.arguments = List.copyOf(builder.arguments);
     }
 
     public boolean hasSubcommand() {
@@ -64,12 +47,20 @@ public final class CommandStructure {
      * Reconstruct the command from its parts
      */
     public String reconstruct() {
+        return getString(baseCommand);
+    }
+
+    private String getString(String baseCommand) {
         StringBuilder sb = new StringBuilder(baseCommand);
 
         if (hasSubcommand()) {
             sb.append(" ").append(subcommand);
         }
 
+        return getString(sb);
+    }
+
+    private String getString(StringBuilder sb) {
         for (String flag : flags) {
             sb.append(" ").append(flag);
         }
@@ -97,63 +88,14 @@ public final class CommandStructure {
         }
 
         // Preserve all original flags
-        for (String flag : flags) {
-            sb.append(" ").append(flag);
-        }
-
-        // Preserve all original arguments
-        for (String arg : arguments) {
-            // Quote arguments that contain spaces
-            if (arg.contains(" ")) {
-                sb.append(" '").append(arg).append("'");
-            } else {
-                sb.append(" ").append(arg);
-            }
-        }
-
-        return sb.toString();
+        return getString(sb);
     }
 
     /**
      * Reconstruct the command with a corrected base command, preserving all other parts
      */
     public String reconstructWithCorrectedBaseCommand(String correctedBaseCommand) {
-        StringBuilder sb = new StringBuilder(correctedBaseCommand);
-
-        if (hasSubcommand()) {
-            sb.append(" ").append(subcommand);
-        }
-
-        for (String flag : flags) {
-            sb.append(" ").append(flag);
-        }
-
-        for (String arg : arguments) {
-            // Quote arguments that contain spaces
-            if (arg.contains(" ")) {
-                sb.append(" '").append(arg).append("'");
-            } else {
-                sb.append(" ").append(arg);
-            }
-        }
-
-        return sb.toString();
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        CommandStructure that = (CommandStructure) o;
-        return Objects.equals(baseCommand, that.baseCommand) &&
-               Objects.equals(subcommand, that.subcommand) &&
-               Objects.equals(flags, that.flags) &&
-               Objects.equals(arguments, that.arguments);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(baseCommand, subcommand, flags, arguments);
+        return getString(correctedBaseCommand);
     }
 
     @Override

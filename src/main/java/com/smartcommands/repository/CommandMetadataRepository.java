@@ -10,10 +10,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-/**
- * Repository for command metadata
- * In production, this could be backed by a database or configuration files
- */
 @Repository
 public class CommandMetadataRepository {
     private static final Logger logger = LoggerFactory.getLogger(CommandMetadataRepository.class);
@@ -25,11 +21,7 @@ public class CommandMetadataRepository {
         initializeDefaultMetadata();
     }
 
-    /**
-     * Initialize with commonly used commands
-     */
     private void initializeDefaultMetadata() {
-        // Docker commands
         addMetadata(CommandMetadata.builder()
             .baseCommand("docker")
             .description("Docker container management")
@@ -54,7 +46,6 @@ public class CommandMetadataRepository {
             ))
             .build());
 
-        // Git commands
         addMetadata(CommandMetadata.builder()
             .baseCommand("git")
             .description("Version control system")
@@ -74,7 +65,6 @@ public class CommandMetadataRepository {
             ))
             .build());
 
-        // Kubectl commands
         addMetadata(CommandMetadata.builder()
             .baseCommand("kubectl")
             .description("Kubernetes cluster management")
@@ -93,7 +83,6 @@ public class CommandMetadataRepository {
             ))
             .build());
 
-        // NPM commands
         addMetadata(CommandMetadata.builder()
             .baseCommand("npm")
             .description("Node package manager")
@@ -115,37 +104,22 @@ public class CommandMetadataRepository {
         logger.info("Initialized metadata for {} commands", commandMetadata.size());
     }
 
-    /**
-     * Add command metadata to repository
-     */
     public void addMetadata(CommandMetadata metadata) {
         commandMetadata.put(metadata.getBaseCommand().toLowerCase(), metadata);
     }
 
-    /**
-     * Get metadata for a command
-     */
     public Optional<CommandMetadata> getMetadata(String baseCommand) {
         return Optional.ofNullable(commandMetadata.get(baseCommand.toLowerCase()));
     }
 
-    /**
-     * Check if metadata exists for a command
-     */
     public boolean hasMetadata(String baseCommand) {
         return commandMetadata.containsKey(baseCommand.toLowerCase());
     }
 
-    /**
-     * Get all registered commands
-     */
     public Set<String> getAllCommands() {
         return Set.copyOf(commandMetadata.keySet());
     }
 
-    /**
-     * Get count of registered commands
-     */
     public int getCommandCount() {
         return commandMetadata.size();
     }

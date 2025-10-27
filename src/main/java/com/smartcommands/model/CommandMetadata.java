@@ -1,12 +1,13 @@
 package com.smartcommands.model;
 
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+
 import java.util.Collections;
-import java.util.Objects;
 import java.util.Set;
 
-/**
- * Metadata about a command including valid subcommands and flags
- */
+@Getter
+@EqualsAndHashCode
 public final class CommandMetadata {
     private final String baseCommand;
     private final Set<String> validSubcommands;
@@ -28,32 +29,11 @@ public final class CommandMetadata {
         this.description = builder.description;
     }
 
-    public String getBaseCommand() {
-        return baseCommand;
-    }
-
-    public Set<String> getValidSubcommands() {
-        return validSubcommands;
-    }
-
-    public Set<String> getValidFlags() {
-        return validFlags;
-    }
-
-    public Set<String> getValidFlagsForSubcommand() {
-        return validFlagsForSubcommand;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
     public boolean isValidSubcommand(String subcommand) {
         return validSubcommands.contains(subcommand.toLowerCase());
     }
 
     public boolean isValidFlag(String flag) {
-        // Normalize flag (remove leading dashes for comparison)
         String normalizedFlag = flag.replaceFirst("^-+", "");
         return validFlags.stream()
             .anyMatch(validFlag -> validFlag.replaceFirst("^-+", "").equals(normalizedFlag));
@@ -61,19 +41,6 @@ public final class CommandMetadata {
 
     public boolean hasSubcommands() {
         return !validSubcommands.isEmpty();
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        CommandMetadata that = (CommandMetadata) o;
-        return Objects.equals(baseCommand, that.baseCommand);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(baseCommand);
     }
 
     @Override
@@ -119,7 +86,6 @@ public final class CommandMetadata {
         }
 
         public CommandMetadata build() {
-            Objects.requireNonNull(baseCommand, "baseCommand must not be null");
             return new CommandMetadata(this);
         }
     }

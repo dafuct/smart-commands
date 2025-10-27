@@ -12,9 +12,6 @@ import org.mockito.MockitoAnnotations;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.when;
 
-/**
- * Unit tests for CommandParser
- */
 class CommandParserTest {
 
     private CommandParser parser;
@@ -115,8 +112,8 @@ class CommandParserTest {
 
         assertEquals("git", structure.getBaseCommand());
         assertEquals("commit", structure.getSubcommand());
-        assertEquals("-m", structure.getFlags().get(0));
-        assertEquals("Test message", structure.getArguments().get(0));
+        assertEquals("-m", structure.getFlags().getFirst());
+        assertEquals("Test message", structure.getArguments().getFirst());
     }
 
     @Test
@@ -126,7 +123,7 @@ class CommandParserTest {
         assertEquals("kubectl", structure.getBaseCommand());
         assertEquals("get", structure.getSubcommand());
         assertEquals(1, structure.getFlags().size());
-        assertEquals("-n", structure.getFlags().get(0));
+        assertEquals("-n", structure.getFlags().getFirst());
         assertEquals(2, structure.getArguments().size());
         assertEquals("pods", structure.getArguments().get(0));
         assertEquals("default", structure.getArguments().get(1));
@@ -184,7 +181,7 @@ class CommandParserTest {
         assertEquals("docker", structure.getBaseCommand());
         assertEquals("run", structure.getSubcommand());
         assertTrue(structure.hasFlags());
-        assertEquals("--name=myapp", structure.getFlags().get(0));
+        assertEquals("--name=myapp", structure.getFlags().getFirst());
     }
 
     @Test

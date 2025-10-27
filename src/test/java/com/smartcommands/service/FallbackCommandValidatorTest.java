@@ -2,15 +2,11 @@ package com.smartcommands.service;
 
 import com.smartcommands.model.CommandSuggestion;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Unit tests for FallbackCommandValidator
- * Tests pattern-based validation for multi-part commands
- */
 class FallbackCommandValidatorTest {
 
     private FallbackCommandValidator validator;

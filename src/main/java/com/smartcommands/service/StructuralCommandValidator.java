@@ -12,15 +12,32 @@ import org.springframework.stereotype.Service;
 
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Structural validator that checks commands against metadata repository
- * This is Tier 2 validation - reference-based validation
- */
+import org.apache.commons.text.similarity.LevenshteinDistance;
+
+
 @Service
 public class StructuralCommandValidator {
     private static final Logger logger = LoggerFactory.getLogger(StructuralCommandValidator.class);
+    private static final int MAX_EDIT_DISTANCE = 2;
+    private static final double TRANSPOSITION_BONUS = 15.0;
+    private static final double FIRST_CHAR_BONUS = 3.0;
+    private static final double LAST_CHAR_BONUS = 2.0;
+    private static final int DISTANCE_CACHE_MAX_SIZE = 5_000;
+
+    private final ConcurrentHashMap<DistanceKey, Integer> distanceCache = new ConcurrentHashMap<>();
+
+    private record DistanceKey(String a, String b) {
+        static DistanceKey of(String s1, String s2) { return (s1.compareTo(s2) <= 0) ? new DistanceKey(s1, s2) : new DistanceKey(s2, s1); }
+    }
+
+    private record SimilarityMatch(String candidate, int distance, double score) implements Comparable<SimilarityMatch> {
+        @Override
+        public int compareTo(SimilarityMatch other) {
+            return Double.compare(this.score, other.score);
+        }
+    }
 
     private final CommandParser commandParser;
     private final CommandMetadataRepository metadataRepository;
@@ -32,45 +49,12 @@ public class StructuralCommandValidator {
         this.metadataRepository = metadataRepository;
     }
 
-    /**
-     * Validate command structure and return suggestion if corrections needed
-     * Returns Optional.empty() if command is valid or metadata not available
-     */
     public Optional<CommandSuggestion> validateStructure(String command) {
         try {
             CommandStructure structure = commandParser.parse(command);
-            logger.debug("Validating structure: {}", structure);
 
-            // Check if we have metadata for this command
-            Optional<CommandMetadata> metadataOpt = metadataRepository
-                .getMetadata(structure.getBaseCommand());
-
-            if (metadataOpt.isEmpty()) {
-                logger.debug("No metadata available for command: {}", structure.getBaseCommand());
-                return Optional.empty();
-            }
-
-            CommandMetadata metadata = metadataOpt.get();
-
-            // Validate subcommand if present
-            if (structure.hasSubcommand()) {
-                Optional<CommandSuggestion> subcommandValidation =
-                    validateSubcommand(structure, metadata);
-                if (subcommandValidation.isPresent()) {
-                    return subcommandValidation;
-                }
-            }
-
-            // Validate flags
-            Optional<CommandSuggestion> flagValidation =
-                validateFlags(structure, metadata);
-            if (flagValidation.isPresent()) {
-                return flagValidation;
-            }
-
-            // Command is structurally valid
-            logger.debug("Command passed structural validation: {}", command);
-            return Optional.empty();
+            return metadataRepository.getMetadata(structure.getBaseCommand())
+                .flatMap(metadata -> validateWithMetadata(structure, metadata));
 
         } catch (Exception e) {
             logger.error("Error during structural validation of: {}", command, e);
@@ -78,42 +62,40 @@ public class StructuralCommandValidator {
         }
     }
 
-    /**
-     * Validate subcommand against metadata
-     */
+    private Optional<CommandSuggestion> validateWithMetadata(
+            CommandStructure structure, CommandMetadata metadata) {
+
+        return Optional.of(structure)
+            .filter(CommandStructure::hasSubcommand)
+            .flatMap(s -> validateSubcommand(s, metadata))
+            .or(() -> validateFlags(structure, metadata));
+    }
+
     private Optional<CommandSuggestion> validateSubcommand(
             CommandStructure structure, CommandMetadata metadata) {
 
         String subcommand = structure.getSubcommand();
-        String baseCommand = structure.getBaseCommand();
 
-        if (!metadata.isValidSubcommand(subcommand)) {
-            logger.info("Invalid subcommand detected: {} {}", baseCommand, subcommand);
-
-            // Find closest match using edit distance
-            Optional<String> closestMatch = findClosestMatch(
-                subcommand, metadata.getValidSubcommands());
-
-            if (closestMatch.isPresent()) {
-                String correctedSubcommand = closestMatch.get();
-                String correctedCommand = structure.reconstructWithCorrectedSubcommand(correctedSubcommand);
-
-                logger.info("Suggesting correction: {} -> {}",
-                    structure.getRawCommand(), correctedCommand);
-
-                return Optional.of(CommandSuggestion.correction(
-                    structure.getRawCommand(),
-                    correctedCommand
-                ));
-            }
+        if (metadata.isValidSubcommand(subcommand)) {
+            return Optional.empty();
         }
 
-        return Optional.empty();
+        logger.info("Invalid subcommand detected: {} {}", structure.getBaseCommand(), subcommand);
+
+        return findClosestMatch(subcommand, metadata.getValidSubcommands())
+            .map(correctedSubcommand -> createSubcommandSuggestion(structure, correctedSubcommand));
     }
 
-    /**
-     * Validate flags against metadata
-     */
+    private CommandSuggestion createSubcommandSuggestion(
+            CommandStructure structure, String correctedSubcommand) {
+
+        String correctedCommand = structure.reconstructWithCorrectedSubcommand(correctedSubcommand);
+
+        logger.info("Suggesting correction: {} -> {}", structure.getRawCommand(), correctedCommand);
+
+        return CommandSuggestion.correction(structure.getRawCommand(), correctedCommand);
+    }
+
     private Optional<CommandSuggestion> validateFlags(
             CommandStructure structure, CommandMetadata metadata) {
 
@@ -121,143 +103,88 @@ public class StructuralCommandValidator {
             return Optional.empty();
         }
 
-        for (String flag : structure.getFlags()) {
-            if (!metadata.isValidFlag(flag)) {
-                logger.info("Invalid flag detected: {} for command {}",
-                    flag, structure.getBaseCommand());
-
-                // Find closest match
-                Optional<String> closestMatch = findClosestMatch(
-                    flag, metadata.getValidFlags());
-
-                if (closestMatch.isPresent()) {
-                    String correctedFlag = closestMatch.get();
-                    // Create a new structure with the corrected flag
-                    CommandStructure.Builder builder = CommandStructure.builder()
-                        .rawCommand(structure.getRawCommand())
-                        .baseCommand(structure.getBaseCommand());
-                    
-                    if (structure.hasSubcommand()) {
-                        builder.subcommand(structure.getSubcommand());
-                    }
-                    
-                    // Add corrected flag instead of the invalid one
-                    for (String f : structure.getFlags()) {
-                        if (f.equals(flag)) {
-                            builder.addFlag(correctedFlag);
-                        } else {
-                            builder.addFlag(f);
-                        }
-                    }
-                    
-                    // Add all original arguments
-                    for (String arg : structure.getArguments()) {
-                        builder.addArgument(arg);
-                    }
-                    
-                    CommandStructure correctedStructure = builder.build();
-                    String correctedCommand = correctedStructure.reconstruct();
-
-                    logger.info("Suggesting flag correction: {} -> {}",
-                        structure.getRawCommand(), correctedCommand);
-
-                    return Optional.of(CommandSuggestion.correction(
-                        structure.getRawCommand(),
-                        correctedCommand
-                    ));
-                }
-            }
-        }
-
-        return Optional.empty();
+        return structure.getFlags().stream()
+            .filter(flag -> !metadata.isValidFlag(flag))
+            .findFirst()
+            .flatMap(invalidFlag -> correctInvalidFlag(structure, metadata, invalidFlag));
     }
 
-    /**
-     * Find closest matching string using enhanced similarity scoring
-     * Considers:
-     * - Levenshtein distance
-     * - Common character positions
-     * - Transposition detection (e.g., "ps" vs "sp")
-     * Only returns matches within threshold
-     */
+    private Optional<CommandSuggestion> correctInvalidFlag(
+            CommandStructure structure, CommandMetadata metadata, String invalidFlag) {
+
+        logger.info("Invalid flag detected: {} for command {}", invalidFlag, structure.getBaseCommand());
+
+        return findClosestMatch(invalidFlag, metadata.getValidFlags())
+            .map(correctedFlag -> buildCorrectedFlagCommand(structure, invalidFlag, correctedFlag));
+    }
+
+    private CommandSuggestion buildCorrectedFlagCommand(
+            CommandStructure structure, String invalidFlag, String correctedFlag) {
+
+        CommandStructure.Builder builder = CommandStructure.builder()
+            .rawCommand(structure.getRawCommand())
+            .baseCommand(structure.getBaseCommand());
+
+        Optional.ofNullable(structure.getSubcommand())
+            .filter(sub -> !sub.isEmpty())
+            .ifPresent(builder::subcommand);
+
+        structure.getFlags().stream()
+            .map(flag -> flag.equals(invalidFlag) ? correctedFlag : flag)
+            .forEach(builder::addFlag);
+
+        structure.getArguments().forEach(builder::addArgument);
+
+        CommandStructure correctedStructure = builder.build();
+        String correctedCommand = correctedStructure.reconstruct();
+
+        logger.info("Suggesting flag correction: {} -> {}", structure.getRawCommand(), correctedCommand);
+
+        return CommandSuggestion.correction(structure.getRawCommand(), correctedCommand);
+    }
+
     private Optional<String> findClosestMatch(String input, Set<String> candidates) {
         if (candidates.isEmpty()) {
             return Optional.empty();
         }
 
-        int minDistance = Integer.MAX_VALUE;
-        String closestMatch = null;
-        double bestScore = Double.MAX_VALUE;
+        String inputLower = input.toLowerCase();
 
-        for (String candidate : candidates) {
-            int distance = levenshteinDistance(
-                input.toLowerCase(),
-                candidate.toLowerCase()
-            );
-
-            // Calculate similarity score combining distance and other factors
-            double score = calculateSimilarityScore(
-                input.toLowerCase(),
-                candidate.toLowerCase(),
-                distance
-            );
-
-            if (score < bestScore) {
-                bestScore = score;
-                minDistance = distance;
-                closestMatch = candidate;
-            }
-        }
-
-        // Only suggest if within reasonable threshold (edit distance <= 2)
-        if (minDistance <= 2 && closestMatch != null) {
-            logger.debug("Found close match: {} -> {} (distance: {}, score: {})",
-                input, closestMatch, minDistance, bestScore);
-            return Optional.of(closestMatch);
-        }
-
-        logger.debug("No close match found for: {} (min distance: {})",
-            input, minDistance);
-        return Optional.empty();
+        return candidates.stream()
+            .map(candidate -> {
+                String candidateLower = candidate.toLowerCase();
+                int distance = levenshteinDistance(inputLower, candidateLower);
+                double score = calculateSimilarityScore(inputLower, candidateLower, distance);
+                return new SimilarityMatch(candidate, distance, score);
+            })
+            .filter(match -> match.distance() <= MAX_EDIT_DISTANCE)
+            .min(SimilarityMatch::compareTo)
+            .map(SimilarityMatch::candidate);
     }
 
-    /**
-     * Calculate similarity score considering multiple factors
-     * Lower score = better match
-     */
     private double calculateSimilarityScore(String input, String candidate, int distance) {
-        double score = distance * 10.0; // Base score from edit distance
+        double score = distance * 10.0;
 
-        // Bonus for transposition (common typo pattern like "sp" vs "ps")
         if (isTransposition(input, candidate)) {
-            score -= 15.0; // Strong preference for transpositions
+            score -= TRANSPOSITION_BONUS;
         }
 
-        // Bonus for matching first character (common in command completion)
-        if (input.length() > 0 && candidate.length() > 0 
-            && input.charAt(0) == candidate.charAt(0)) {
-            score -= 3.0;
+        if (!input.isEmpty() && !candidate.isEmpty() && input.charAt(0) == candidate.charAt(0)) {
+            score -= FIRST_CHAR_BONUS;
         }
 
-        // Bonus for matching last character
-        if (input.length() > 0 && candidate.length() > 0
-            && input.charAt(input.length() - 1) == candidate.charAt(candidate.length() - 1)) {
-            score -= 2.0;
+        if (!input.isEmpty() && !candidate.isEmpty()
+                && input.charAt(input.length() - 1) == candidate.charAt(candidate.length() - 1)) {
+            score -= LAST_CHAR_BONUS;
         }
 
-        // Bonus for similar length
-        int lengthDiff = Math.abs(input.length() - candidate.length());
-        score += lengthDiff * 2.0;
+        score += Math.abs(input.length() - candidate.length()) * 2.0;
 
         return score;
     }
 
-    /**
-     * Check if the difference between two strings is just a transposition
-     * e.g., "sp" and "ps", "tset" and "test"
-     */
     private boolean isTransposition(String s1, String s2) {
-        if (Math.abs(s1.length() - s2.length()) != 0) {
+        if (s1.length() != s2.length()) {
             return false;
         }
 
@@ -277,52 +204,44 @@ public class StructuralCommandValidator {
             }
         }
 
-        // If exactly 2 adjacent characters differ, check if they're swapped
-        if (differences == 2 && transpositionIndex >= 0 && transpositionIndex < s1.length() - 1) {
-            return s1.charAt(transpositionIndex) == s2.charAt(transpositionIndex + 1)
-                && s1.charAt(transpositionIndex + 1) == s2.charAt(transpositionIndex);
-        }
-
-        return false;
+        return differences == 2
+            && transpositionIndex < s1.length() - 1
+            && s1.charAt(transpositionIndex) == s2.charAt(transpositionIndex + 1)
+            && s1.charAt(transpositionIndex + 1) == s2.charAt(transpositionIndex);
     }
 
-    /**
-     * Calculate Levenshtein distance between two strings
-     */
     private int levenshteinDistance(String s1, String s2) {
-        int[][] dp = new int[s1.length() + 1][s2.length() + 1];
-
-        for (int i = 0; i <= s1.length(); i++) {
-            dp[i][0] = i;
+        if (s1.equals(s2)) {
+            return 0;
         }
-
-        for (int j = 0; j <= s2.length(); j++) {
-            dp[0][j] = j;
+        if (Math.abs(s1.length() - s2.length()) > MAX_EDIT_DISTANCE) {
+            return MAX_EDIT_DISTANCE + 1;
         }
+        DistanceKey key = DistanceKey.of(s1, s2);
+        Integer cached = distanceCache.get(key);
+        if (cached != null) return cached;
 
-        for (int i = 1; i <= s1.length(); i++) {
-            for (int j = 1; j <= s2.length(); j++) {
-                int cost = s1.charAt(i - 1) == s2.charAt(j - 1) ? 0 : 1;
-                dp[i][j] = Math.min(
-                    Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1),
-                    dp[i - 1][j - 1] + cost
-                );
-            }
+        int dist = rawLevenshtein(s1, s2);
+
+        if (distanceCache.size() < DISTANCE_CACHE_MAX_SIZE) {
+            distanceCache.putIfAbsent(key, dist);
         }
-
-        return dp[s1.length()][s2.length()];
+        return dist;
     }
 
-    /**
-     * Get metadata for command if available
-     */
+    private int rawLevenshtein(String s1, String s2) {
+        LevenshteinDistance levenshteinDistance = new LevenshteinDistance(MAX_EDIT_DISTANCE + 1);
+        int distance = levenshteinDistance.apply(s1, s2);
+        if (distance < 0) {
+            return MAX_EDIT_DISTANCE + 1;
+        }
+        return distance;
+    }
+
     public Optional<CommandMetadata> getCommandMetadata(String baseCommand) {
         return metadataRepository.getMetadata(baseCommand);
     }
 
-    /**
-     * Check if metadata exists for command
-     */
     public boolean hasMetadata(String baseCommand) {
         return metadataRepository.hasMetadata(baseCommand);
     }

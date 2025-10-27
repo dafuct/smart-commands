@@ -1,8 +1,13 @@
 package com.smartcommands.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Getter;
+import lombok.Setter;
 
+@Setter
+@Getter
 public class OllamaResponse {
+
     private String model;
     private String response;
     private boolean done;
@@ -14,48 +19,10 @@ public class OllamaResponse {
 
     public OllamaResponse() {}
 
-    // Getters and Setters
-    public String getModel() {
-        return model;
-    }
-
-    public void setModel(String model) {
-        this.model = model;
-    }
-
-    public String getResponse() {
-        return response;
-    }
-
-    public void setResponse(String response) {
-        this.response = response;
-    }
-
-    public boolean isDone() {
-        return done;
-    }
-
-    public void setDone(boolean done) {
-        this.done = done;
-    }
-
-    public String getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(String createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public OllamaMetrics getMetrics() {
-        return metrics;
-    }
-
-    public void setMetrics(OllamaMetrics metrics) {
-        this.metrics = metrics;
-    }
-
+    @Setter
+    @Getter
     public static class OllamaMetrics {
+
         @JsonProperty("prompt_eval_count")
         private int promptEvalCount;
         
@@ -70,37 +37,5 @@ public class OllamaResponse {
 
         public OllamaMetrics() {}
 
-        // Getters and Setters
-        public int getPromptEvalCount() {
-            return promptEvalCount;
-        }
-
-        public void setPromptEvalCount(int promptEvalCount) {
-            this.promptEvalCount = promptEvalCount;
-        }
-
-        public long getPromptEvalDuration() {
-            return promptEvalDuration;
-        }
-
-        public void setPromptEvalDuration(long promptEvalDuration) {
-            this.promptEvalDuration = promptEvalDuration;
-        }
-
-        public int getEvalCount() {
-            return evalCount;
-        }
-
-        public void setEvalCount(int evalCount) {
-            this.evalCount = evalCount;
-        }
-
-        public long getEvalDuration() {
-            return evalDuration;
-        }
-
-        public void setEvalDuration(long evalDuration) {
-            this.evalDuration = evalDuration;
-        }
     }
 }

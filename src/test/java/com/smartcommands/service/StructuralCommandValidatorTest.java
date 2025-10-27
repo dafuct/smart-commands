@@ -45,10 +45,12 @@ class StructuralCommandValidatorTest {
     void testValidateDockerSpCommand_InvalidSubcommand() {
         Optional<CommandSuggestion> result = validator.validateStructure("docker sp -a");
 
-        // With new Ollama-based CommandParser, structural validation won't correct typos
-        // It only validates against metadata, and "sp" is not a valid docker subcommand
-        // But without hardcoded corrections, it won't suggest "ps"
-        assertTrue(result.isEmpty(), "No correction expected from structural validation alone");
+        // Structural validation should detect the typo and suggest correction
+        // "sp" is close enough to "ps" (transposition, distance = 2)
+        assertTrue(result.isPresent(), "Structural validation should suggest correction for 'sp' -> 'ps'");
+        CommandSuggestion suggestion = result.get();
+        assertTrue(suggestion.needsCorrection());
+        assertTrue(suggestion.getSuggestion().contains("ps"), "Should suggest 'ps' command");
     }
 
     @Test
@@ -72,10 +74,12 @@ class StructuralCommandValidatorTest {
     void testValidateGitStatutsCommand_Typo() {
         Optional<CommandSuggestion> result = validator.validateStructure("git statuts");
 
-        // With new Ollama-based CommandParser, structural validation won't correct typos
-        // It only validates against metadata, and "statuts" is not a valid git subcommand
-        // But without hardcoded corrections, it won't suggest "status"
-        assertTrue(result.isEmpty(), "No correction expected from structural validation alone");
+        // Structural validation should detect the typo and suggest correction
+        // "statuts" is close to "status" (1 char difference, distance = 1)
+        assertTrue(result.isPresent(), "Structural validation should suggest correction for 'statuts' -> 'status'");
+        CommandSuggestion suggestion = result.get();
+        assertTrue(suggestion.needsCorrection());
+        assertTrue(suggestion.getSuggestion().contains("status"), "Should suggest 'status' command");
     }
 
     @Test
@@ -89,10 +93,12 @@ class StructuralCommandValidatorTest {
     void testValidateKubectlGte_InvalidSubcommand() {
         Optional<CommandSuggestion> result = validator.validateStructure("kubectl gte pods");
 
-        // With new Ollama-based CommandParser, structural validation won't correct typos
-        // It only validates against metadata, and "gte" is not a valid kubectl subcommand
-        // But without hardcoded corrections, it won't suggest "get"
-        assertTrue(result.isEmpty(), "No correction expected from structural validation alone");
+        // Structural validation should detect the typo and suggest correction
+        // "gte" is close to "get" (1 char extra, distance = 1)
+        assertTrue(result.isPresent(), "Structural validation should suggest correction for 'gte' -> 'get'");
+        CommandSuggestion suggestion = result.get();
+        assertTrue(suggestion.needsCorrection());
+        assertTrue(suggestion.getSuggestion().contains("get"), "Should suggest 'get' command");
     }
 
     @Test
@@ -113,10 +119,12 @@ class StructuralCommandValidatorTest {
     void testValidateNpmInstlal_Typo() {
         Optional<CommandSuggestion> result = validator.validateStructure("npm instlal express");
 
-        // With new Ollama-based CommandParser, structural validation won't correct typos
-        // It only validates against metadata, and "instlal" is not a valid npm subcommand
-        // But without hardcoded corrections, it won't suggest "install"
-        assertTrue(result.isEmpty(), "No correction expected from structural validation alone");
+        // Structural validation should detect the typo and suggest correction
+        // "instlal" is close to "install" (1 char transposition, distance = 2)
+        assertTrue(result.isPresent(), "Structural validation should suggest correction for 'instlal' -> 'install'");
+        CommandSuggestion suggestion = result.get();
+        assertTrue(suggestion.needsCorrection());
+        assertTrue(suggestion.getSuggestion().contains("install"), "Should suggest 'install' command");
     }
 
     @Test

@@ -1,7 +1,11 @@
 package com.smartcommands.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Getter;
+import lombok.Setter;
 
+@Setter
+@Getter
 public class OllamaRequest {
     private String model;
     private String prompt;
@@ -18,39 +22,8 @@ public class OllamaRequest {
         this.options = new OllamaOptions();
     }
 
-    // Getters and Setters
-    public String getModel() {
-        return model;
-    }
-
-    public void setModel(String model) {
-        this.model = model;
-    }
-
-    public String getPrompt() {
-        return prompt;
-    }
-
-    public void setPrompt(String prompt) {
-        this.prompt = prompt;
-    }
-
-    public boolean isStream() {
-        return stream;
-    }
-
-    public void setStream(boolean stream) {
-        this.stream = stream;
-    }
-
-    public OllamaOptions getOptions() {
-        return options;
-    }
-
-    public void setOptions(OllamaOptions options) {
-        this.options = options;
-    }
-
+    @Setter
+    @Getter
     public static class OllamaOptions {
         @JsonProperty("temperature")
         private double temperature = 0.7;
@@ -63,29 +36,5 @@ public class OllamaRequest {
 
         public OllamaOptions() {}
 
-        // Getters and Setters
-        public double getTemperature() {
-            return temperature;
-        }
-
-        public void setTemperature(double temperature) {
-            this.temperature = temperature;
-        }
-
-        public double getTopP() {
-            return topP;
-        }
-
-        public void setTopP(double topP) {
-            this.topP = topP;
-        }
-
-        public int getMaxTokens() {
-            return maxTokens;
-        }
-
-        public void setMaxTokens(int maxTokens) {
-            this.maxTokens = maxTokens;
-        }
     }
 }
