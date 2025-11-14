@@ -211,7 +211,7 @@ Command:"
             -H "Content-Type: application/json" \
             -d "{\"model\":\"$OLLAMA_MODEL\",\"prompt\":$(echo "$prompt" | jq -R -s .),\"stream\":false}" 2>/dev/null)
 
-        local suggestion=$(printf '%s' "$response" | jq -r '.response' 2>/dev/null | tr -d '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        local suggestion=$(printf '%s' "$response" | jq -r '.response' 2>/dev/null | tr -d '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | sed 's/^```bash//;s/```$//' | sed 's/^```sh//;s/```$//' | sed 's/^```//;s/```$//' | sed 's/^`//;s/`$//' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | sed 's/^Fixed://;s/^[[:space:]]*//')
 
         if [ -n "$suggestion" ] && [ "$suggestion" != "null" ]; then
             display_suggestion "sc '$task'" "$suggestion"

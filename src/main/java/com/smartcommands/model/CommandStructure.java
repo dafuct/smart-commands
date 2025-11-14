@@ -43,9 +43,6 @@ public final class CommandStructure {
         return !arguments.isEmpty();
     }
 
-    /**
-     * Reconstruct the command from its parts
-     */
     public String reconstruct() {
         return getString(baseCommand);
     }
@@ -66,7 +63,6 @@ public final class CommandStructure {
         }
 
         for (String arg : arguments) {
-            // Quote arguments that contain spaces
             if (arg.contains(" ")) {
                 sb.append(" '").append(arg).append("'");
             } else {
@@ -77,9 +73,6 @@ public final class CommandStructure {
         return sb.toString();
     }
 
-    /**
-     * Reconstruct the command with a corrected subcommand, preserving all flags and arguments
-     */
     public String reconstructWithCorrectedSubcommand(String correctedSubcommand) {
         StringBuilder sb = new StringBuilder(baseCommand);
 
@@ -87,13 +80,9 @@ public final class CommandStructure {
             sb.append(" ").append(correctedSubcommand);
         }
 
-        // Preserve all original flags
         return getString(sb);
     }
 
-    /**
-     * Reconstruct the command with a corrected base command, preserving all other parts
-     */
     public String reconstructWithCorrectedBaseCommand(String correctedBaseCommand) {
         return getString(correctedBaseCommand);
     }
@@ -151,8 +140,6 @@ public final class CommandStructure {
         }
 
         public CommandStructure build() {
-            Objects.requireNonNull(rawCommand, "rawCommand must not be null");
-            Objects.requireNonNull(baseCommand, "baseCommand must not be null");
             return new CommandStructure(this);
         }
     }

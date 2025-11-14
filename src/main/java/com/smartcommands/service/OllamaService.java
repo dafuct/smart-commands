@@ -86,7 +86,8 @@ public class OllamaService {
                     .block();
 
             if (response != null && response.getResponse() != null) {
-                return response.getResponse().trim();
+                String rawResponse = response.getResponse().trim();
+                return cleanCommandResponse(rawResponse);
             }
         } catch (Exception e) {
             logger.error("Failed to generate command suggestion: {}", e.getMessage());
@@ -98,9 +99,13 @@ public class OllamaService {
     public String suggestCorrectCommand(String incorrectCommand) {
         String prompt = String.format(
                 "The user entered the command '%s' which is incorrect. " +
-                        "Please suggest the correct Linux/macOS terminal command. " +
-                        "Respond with ONLY the correct command, no explanation. " +
-                        "If multiple commands could work, provide the most common one.",
+                        "You must suggest the correct Linux/macOS terminal command. " +
+                        "IMPORTANT: Respond with ONLY the exact command name and arguments, nothing else. " +
+                        "Do NOT suggest script names, do NOT suggest file names, do NOT add explanations. " +
+                        "Examples: 'colma start' -> 'colima start', 'lsl' -> 'ls', 'docker ps -a' -> 'docker ps -a'. " +
+                        "If the command is a typo, fix the typo. If it's a wrong subcommand, suggest the correct subcommand. " +
+                        "Respond with ONLY the corrected command, no markdown, no code blocks, no explanations. " +
+                        "CRITICAL: Do NOT include ```bash, ```sh, or any backticks in your response.",
                 incorrectCommand
         );
 
@@ -112,11 +117,41 @@ public class OllamaService {
                 "The user wants to: %s. " +
                         "Please provide the most appropriate Linux/macOS terminal command(s) to accomplish this task. " +
                         "Format your response as a single line with the command(s), separated by && if multiple commands are needed. " +
-                        "Do not include explanations, only the command(s).",
+                        "Do not include explanations, only the command(s), no markdown formatting, no code blocks. " +
+                        "CRITICAL: Do NOT include ```bash, ```sh, or any backticks in your response.",
                 taskDescription
         );
 
         return generateCommandSuggestion(taskDescription, prompt);
+    }
+
+    private String cleanCommandResponse(String response) {
+        if (response == null || response.trim().isEmpty()) {
+            return response;
+        }
+
+        String cleaned = response.trim();
+
+        // Remove markdown code blocks with language specifiers (```bash, ```sh, etc.)
+        // Handle both with and without spaces: ```bash command and ```bashcommand
+        cleaned = cleaned.replaceAll("```(?:bash|sh|shell|zsh)?\\s*", "");
+        cleaned = cleaned.replaceAll("```$", "");
+
+        // Remove any remaining backticks at start or end
+        cleaned = cleaned.replaceAll("^`+|`+$", "");
+
+        // Remove any remaining markdown formatting
+        cleaned = cleaned.replaceAll("\\*\\*(.*?)\\*\\*", "$1"); // Bold
+        cleaned = cleaned.replaceAll("\\*(.*?)\\*", "$1"); // Italic
+        cleaned = cleaned.replaceAll("`(.*?)`", "$1"); // Inline code
+
+        // Clean up extra whitespace
+        cleaned = cleaned.replaceAll("\\s+", " ").trim();
+
+        // Remove common explanatory prefixes
+        cleaned = cleaned.replaceAll("^(?:Command:|Suggestion:|Here's the command:|Use:|Run:)\\s*", "");
+
+        return cleaned;
     }
 
     private String buildPrompt(String userInput, String context) {

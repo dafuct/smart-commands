@@ -44,7 +44,7 @@ public class CommandParser {
             throw new IllegalArgumentException("No tokens found in command");
         }
 
-        String baseCommand = tokens.getFirst();
+        String baseCommand = tokens.get(0);
         boolean expectsSubcommand = SUBCOMMAND_COMMANDS.contains(baseCommand.toLowerCase());
 
         return buildCommandStructure(trimmedCommand, tokens, baseCommand, expectsSubcommand);
@@ -69,9 +69,6 @@ public class CommandParser {
         return builder.build();
     }
 
-    /**
-     * Processes subcommand if present and returns the next token index
-     */
     private int processSubcommand(List<String> tokens, CommandStructure.Builder builder,
                                   boolean expectsSubcommand) {
         if (expectsSubcommand && tokens.size() > 1) {
@@ -95,9 +92,6 @@ public class CommandParser {
             });
     }
 
-    /**
-     * Tokenize command string, respecting quotes and special characters
-     */
     private List<String> tokenize(String command) {
         return TOKEN_PATTERN.matcher(command)
             .results()

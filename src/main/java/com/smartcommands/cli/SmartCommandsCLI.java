@@ -183,46 +183,4 @@ public class SmartCommandsCLI implements CommandLineRunner {
         terminal.writer().println(helpText);
         terminal.flush();
     }
-
-    public void interactiveMode() {
-        terminal.writer().println("Smart Commands Interactive Mode");
-        terminal.writer().println("Type 'exit' to quit");
-        terminal.writer().println("===============================");
-        terminal.flush();
-
-        while (true) {
-            try {
-                String input = lineReader.readLine("smart> ");
-
-                if (input.equalsIgnoreCase("exit") || input.equalsIgnoreCase("quit")) {
-                    break;
-                }
-
-                if (input.isEmpty()) {
-                    continue;
-                }
-
-                if (input.equals("--status")) {
-                    // TODO: Implement checkStatus method
-                    terminal.writer().println("Status check not yet implemented");
-                    terminal.flush();
-                    continue;
-                }
-
-                if (input.equals("--help")) {
-                    printUsage();
-                    continue;
-                }
-
-                processCommand(input);
-            } catch (Exception e) {
-                logger.error("Error in interactive mode", e);
-                terminal.writer().println("❌ Error: " + e.getMessage());
-                terminal.flush();
-            }
-        }
-
-        terminal.writer().println("Goodbye!");
-        terminal.flush();
-    }
 }

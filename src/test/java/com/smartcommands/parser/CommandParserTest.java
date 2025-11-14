@@ -112,8 +112,8 @@ class CommandParserTest {
 
         assertEquals("git", structure.getBaseCommand());
         assertEquals("commit", structure.getSubcommand());
-        assertEquals("-m", structure.getFlags().getFirst());
-        assertEquals("Test message", structure.getArguments().getFirst());
+        assertEquals("-m", structure.getFlags().get(0));
+        assertEquals("Test message", structure.getArguments().get(0));
     }
 
     @Test
@@ -123,7 +123,7 @@ class CommandParserTest {
         assertEquals("kubectl", structure.getBaseCommand());
         assertEquals("get", structure.getSubcommand());
         assertEquals(1, structure.getFlags().size());
-        assertEquals("-n", structure.getFlags().getFirst());
+        assertEquals("-n", structure.getFlags().get(0));
         assertEquals(2, structure.getArguments().size());
         assertEquals("pods", structure.getArguments().get(0));
         assertEquals("default", structure.getArguments().get(1));
@@ -181,7 +181,7 @@ class CommandParserTest {
         assertEquals("docker", structure.getBaseCommand());
         assertEquals("run", structure.getSubcommand());
         assertTrue(structure.hasFlags());
-        assertEquals("--name=myapp", structure.getFlags().getFirst());
+        assertEquals("--name=myapp", structure.getFlags().get(0));
     }
 
     @Test

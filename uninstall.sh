@@ -1,0 +1,1 @@
+/Users/makar/personal/smart-commands/scripts/uninstall.sh

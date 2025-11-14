@@ -32,7 +32,7 @@ LOGS_DIR="$INSTALL_DIR/logs"
 SCRIPTS_DIR="$INSTALL_DIR/scripts"
 CONFIG_DIR="$INSTALL_DIR/config"
 JDK_DIR="$INSTALL_DIR/jdk"
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Application configuration
 APP_NAME="Smart Commands"
@@ -266,50 +266,101 @@ install_ollama() {
 
     if command_exists ollama; then
         print_success "Ollama is already installed"
-
-        # Check if Ollama service is running
-        if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
-            print_success "Ollama service is running"
-        else
-            print_warning "Ollama is installed but not running"
-            print_step "Starting Ollama service..."
-
-            local os=$(detect_os)
-            if [ "$os" = "macos" ]; then
-                # On macOS, Ollama runs as an app
-                open -a Ollama 2>/dev/null || print_warning "Please start Ollama manually"
-            else
-                # On Linux, start as service
-                ollama serve > /dev/null 2>&1 &
-                sleep 2
-            fi
-        fi
     else
         print_step "Installing Ollama..."
-
         curl -fsSL https://ollama.com/install.sh | sh
-
         print_success "Ollama installed successfully"
-
-        # Start Ollama service
-        print_step "Starting Ollama service..."
-        local os=$(detect_os)
-        if [ "$os" = "macos" ]; then
-            open -a Ollama 2>/dev/null || print_warning "Please start Ollama manually"
-        else
-            ollama serve > /dev/null 2>&1 &
-        fi
-
-        sleep 3
     fi
+
+    # Ensure Ollama service is running
+    ensure_ollama_running
+}
+
+# Helper function to ensure Ollama is running
+ensure_ollama_running() {
+    print_step "Ensuring Ollama service is running..."
+
+    # Check if already running with retry logic
+    local max_wait=10
+    local count=0
+
+    while [ $count -lt $max_wait ]; do
+        if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+            print_success "Ollama service is running"
+            return 0
+        fi
+        sleep 1
+        count=$((count + 1))
+    done
+
+    # Service not running, start it
+    print_warning "Ollama service is not running, starting it..."
+
+    # Start Ollama service in background (works on both macOS and Linux)
+    ollama serve > /dev/null 2>&1 &
+    local ollama_pid=$!
+
+    # Wait for service to be ready
+    count=0
+    while [ $count -lt $max_wait ]; do
+        if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+            print_success "Ollama service started successfully (PID: $ollama_pid)"
+            return 0
+        fi
+        sleep 1
+        count=$((count + 1))
+    done
+
+    # If still not running, try macOS app approach
+    if [ "$(detect_os)" = "macos" ]; then
+        print_warning "Trying macOS app approach..."
+        open -a Ollama 2>/dev/null
+
+        # Wait again for app to start
+        count=0
+        while [ $count -lt 15 ]; do
+            if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+                print_success "Ollama app started successfully"
+                return 0
+            fi
+            sleep 1
+            count=$((count + 1))
+        done
+    fi
+
+    print_error "Failed to start Ollama service"
+    print_warning "Please start Ollama manually and try again"
+    return 1
 }
 
 # Step 5: Download Ollama Model
 download_ollama_model() {
     print_step "Checking Ollama model: $OLLAMA_MODEL..."
 
-    # Check if model is already downloaded
-    if ollama list | grep -q "$OLLAMA_MODEL" 2>/dev/null; then
+    # First ensure Ollama service is running
+    if ! ensure_ollama_running; then
+        print_error "Cannot proceed with model download - Ollama service is not running"
+        return 1
+    fi
+
+    # Wait a moment for service to be fully ready
+    sleep 2
+
+    # Check if model is already downloaded with retry logic
+    local max_wait=5
+    local count=0
+    local model_found=false
+
+    while [ $count -lt $max_wait ]; do
+        if ollama list 2>/dev/null | grep -q "$OLLAMA_MODEL"; then
+            model_found=true
+            break
+        fi
+        sleep 1
+        count=$((count + 1))
+    done
+
+    if [ "$model_found" = true ]; then
         print_success "Model $OLLAMA_MODEL is already downloaded"
         return 0
     fi
@@ -319,9 +370,18 @@ download_ollama_model() {
 
     if ollama pull "$OLLAMA_MODEL"; then
         print_success "Model $OLLAMA_MODEL downloaded successfully"
+
+        # Verify the model was downloaded successfully
+        sleep 2
+        if ollama list 2>/dev/null | grep -q "$OLLAMA_MODEL"; then
+            print_success "Model verification completed"
+        else
+            print_warning "Model downloaded but verification failed"
+        fi
     else
         print_error "Failed to download model $OLLAMA_MODEL"
         print_warning "You can download it later by running: ollama pull $OLLAMA_MODEL"
+        return 1
     fi
 }
 
@@ -573,12 +633,9 @@ create_shell_integration() {
     if [ -f "$PROJECT_DIR/src/main/resources/smart-commands-enhanced.sh" ]; then
         cp "$PROJECT_DIR/src/main/resources/smart-commands-enhanced.sh" "$SCRIPTS_DIR/smart-commands-shell.sh"
 
-        # Update paths in the shell script
-        sed -i.bak "s|SMART_COMMANDS_BIN=\"\$HOME/.local/bin/smart-commands\"|SMART_COMMANDS_BIN=\"$SCRIPTS_DIR/smart-commands-server.sh\"|g" "$SCRIPTS_DIR/smart-commands-shell.sh"
-        rm -f "$SCRIPTS_DIR/smart-commands-shell.sh.bak"
-
         chmod +x "$SCRIPTS_DIR/smart-commands-shell.sh"
-        print_success "Shell integration script created"
+        print_success "Shell integration script created with conservative command validation"
+        print_info "The shell integration now only validates likely typos to avoid interference"
     else
         print_error "Shell integration template not found"
         exit 1
@@ -609,7 +666,25 @@ integrate_zshrc() {
     fi
 
     # Add integration
-    cat >> "$zshrc" << EOF
+    if [ -f "$SCRIPTS_DIR/smart-commands-shell.sh" ]; then
+        # Check if integration already exists
+        if grep -q "$integration_marker" "$zshrc" 2>/dev/null; then
+            print_warning "Smart Commands is already integrated in .zshrc"
+
+            # Ask user if they want to update
+            read -p "Do you want to update the integration? (y/N): " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                print_info "Skipping .zshrc integration"
+                return 0
+            fi
+
+            # Remove old integration
+            sed -i.bak "/$integration_marker/,/# End Smart Commands Integration/d" "$zshrc"
+        fi
+
+        # Add new integration
+        cat >> "$zshrc" << EOF
 
 # Smart Commands Integration
 # Source the Smart Commands shell integration
@@ -624,6 +699,7 @@ fi
 
 # End Smart Commands Integration
 EOF
+    fi
 
     print_success ".zshrc integration complete"
     print_info "Shell integration will be active in new terminal sessions"

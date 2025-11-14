@@ -1,14 +1,16 @@
 package com.smartcommands.controller;
 
-import com.smartcommands.model.CommandSuggestion;
-import com.smartcommands.service.CommandProcessorService;
+import com.smartcommands.dto.BaseResponse;
+import com.smartcommands.dto.GeneralResponse;
+import com.smartcommands.mapper.SmartCommandsMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
+import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api")
@@ -17,31 +19,19 @@ public class CommandSuggestionController {
 
     private static final Logger logger = LoggerFactory.getLogger(CommandSuggestionController.class);
 
-    private final CommandProcessorService commandProcessorService;
+    private final SmartCommandsMapper smartCommandsMapper;
 
-    public CommandSuggestionController(CommandProcessorService commandProcessorService) {
-        this.commandProcessorService = commandProcessorService;
+    public CommandSuggestionController(SmartCommandsMapper smartCommandsMapper) {
+        this.smartCommandsMapper = smartCommandsMapper;
     }
 
     @PostMapping("/suggest")
-    public ResponseEntity<Map<String, Object>> suggestCommand(@RequestBody Map<String, String> request) {
+    public ResponseEntity<GeneralResponse> suggestCommand(@RequestBody Map<String, String> request) {
         try {
-            String command = request.get("command");
-            if (command == null || command.trim().isEmpty()) {
-                return ResponseEntity.badRequest().body(createErrorResponse("Command cannot be empty"));
-            }
-
-            CommandSuggestion suggestion = commandProcessorService.processInput(command);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("originalInput", suggestion.getOriginalInput());
-            response.put("suggestion", suggestion.getSuggestion());
-            response.put("type", suggestion.getType().toString());
-            response.put("message", suggestion.getMessage());
-            response.put("timestamp", suggestion.getTimestamp());
-
-            return ResponseEntity.ok(response);
-
+            return Optional.ofNullable(request.get("command"))
+                    .filter(value -> !value.trim().isEmpty())
+                    .map(value -> ResponseEntity.ok(smartCommandsMapper.mapToSuggestCommand(request)))
+                    .orElseGet(() -> ResponseEntity.badRequest().body(createErrorResponse("Command cannot be empty")));
         } catch (Exception e) {
             logger.error("Error processing command suggestion", e);
             return ResponseEntity.internalServerError()
@@ -50,25 +40,12 @@ public class CommandSuggestionController {
     }
 
     @PostMapping("/smart-command")
-    public ResponseEntity<Map<String, Object>> processSmartCommand(@RequestBody Map<String, String> request) {
+    public ResponseEntity<GeneralResponse> processSmartCommand(@RequestBody Map<String, String> request) {
         try {
-            String task = request.get("task");
-            if (task == null || task.trim().isEmpty()) {
-                return ResponseEntity.badRequest().body(createErrorResponse("Task description cannot be empty"));
-            }
-
-            String smartCommandInput = "sc '" + task + "'";
-            CommandSuggestion suggestion = commandProcessorService.processInput(smartCommandInput);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("task", task);
-            response.put("suggestion", suggestion.getSuggestion());
-            response.put("type", suggestion.getType().toString());
-            response.put("message", suggestion.getMessage());
-            response.put("timestamp", suggestion.getTimestamp());
-
-            return ResponseEntity.ok(response);
-
+            return Optional.ofNullable(request.get("task"))
+                    .filter(value -> !value.trim().isEmpty())
+                    .map(value -> ResponseEntity.ok(smartCommandsMapper.mapToSmartCommand(request)))
+                    .orElseGet(() -> ResponseEntity.badRequest().body(createErrorResponse("Task description cannot be empty")));
         } catch (Exception e) {
             logger.error("Error processing smart command", e);
             return ResponseEntity.internalServerError()
@@ -77,18 +54,10 @@ public class CommandSuggestionController {
     }
 
     @GetMapping("/history")
-    public ResponseEntity<Map<String, Object>> getCommandHistory(
+    public ResponseEntity<GeneralResponse> getCommandHistory(
             @RequestParam(defaultValue = "10") int limit) {
         try {
-            var history = commandProcessorService.getCommandHistory();
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("history", history.stream().limit(limit).toList());
-            response.put("total", history.size());
-            response.put("limit", limit);
-
-            return ResponseEntity.ok(response);
-
+            return ResponseEntity.ok(smartCommandsMapper.mapToHistory(limit));
         } catch (Exception e) {
             logger.error("Error fetching command history", e);
             return ResponseEntity.internalServerError()
@@ -97,20 +66,11 @@ public class CommandSuggestionController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<Map<String, Object>> searchCommands(
+    public ResponseEntity<GeneralResponse> searchCommands(
             @RequestParam String query,
             @RequestParam(defaultValue = "10") int limit) {
         try {
-            var similarCommands = commandProcessorService.findSimilarCommands(query);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("query", query);
-            response.put("results", similarCommands.stream().limit(limit).toList());
-            response.put("total", similarCommands.size());
-            response.put("limit", limit);
-
-            return ResponseEntity.ok(response);
-
+            return ResponseEntity.ok(smartCommandsMapper.mapToSearchCommand(query, limit));
         } catch (Exception e) {
             logger.error("Error searching commands", e);
             return ResponseEntity.internalServerError()
@@ -119,30 +79,14 @@ public class CommandSuggestionController {
     }
 
     @GetMapping("/health")
-    public ResponseEntity<Map<String, Object>> healthCheck() {
-        Map<String, Object> response = new HashMap<>();
-        response.put("status", "UP");
-        response.put("timestamp", System.currentTimeMillis());
-        response.put("service", "Smart Commands API");
-        response.put("version", "1.0.0");
-
-        return ResponseEntity.ok(response);
+    public ResponseEntity<GeneralResponse> healthCheck() {
+        return ResponseEntity.ok(smartCommandsMapper.mapToHealth());
     }
 
     @GetMapping("/status")
-    public ResponseEntity<Map<String, Object>> getSystemStatus() {
+    public ResponseEntity<GeneralResponse> getSystemStatus() {
         try {
-            Map<String, Object> response = new HashMap<>();
-
-            boolean ollamaRunning = commandProcessorService.findCommandInDatabase("test").isPresent();
-            response.put("ollamaStatus", ollamaRunning ? "Connected" : "Not Connected");
-            response.put("databaseStatus", "Connected");
-            response.put("commandProcessorStatus", "Active");
-            response.put("serverPort", 17020);
-            response.put("timestamp", System.currentTimeMillis());
-
-            return ResponseEntity.ok(response);
-
+            return ResponseEntity.ok(smartCommandsMapper.mapToSystemStatus());
         } catch (Exception e) {
             logger.error("Error getting system status", e);
             return ResponseEntity.internalServerError()
@@ -151,48 +95,12 @@ public class CommandSuggestionController {
     }
 
     @PostMapping("/validate")
-    public ResponseEntity<Map<String, Object>> validateCommand(@RequestBody Map<String, String> request) {
+    public ResponseEntity<GeneralResponse> validateCommand(@RequestBody Map<String, String> request) {
         try {
-            String command = request.get("command");
-            if (command == null || command.trim().isEmpty()) {
-                return ResponseEntity.badRequest().body(createErrorResponse("Command cannot be empty"));
-            }
-
-            String suggestion = null;
-            String type = "VALID";
-
-            switch (command.trim().split("\\s+")[0]) {
-                case "lss":
-                case "lsl":
-                case "sl":
-                    suggestion = "ls";
-                    type = "TYPO_CORRECTION";
-                    break;
-                case "gti":
-                case "igt":
-                    suggestion = "git";
-                    type = "TYPO_CORRECTION";
-                    break;
-                case "mdkir":
-                    suggestion = "mkdir";
-                    type = "TYPO_CORRECTION";
-                    break;
-                default:
-                    if (command.startsWith("sc ")) {
-                        type = "SMART_COMMAND";
-                    }
-                    break;
-            }
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("command", command);
-            response.put("valid", suggestion == null);
-            response.put("suggestion", suggestion);
-            response.put("type", type);
-            response.put("timestamp", System.currentTimeMillis());
-
-            return ResponseEntity.ok(response);
-
+            return Optional.ofNullable(request.get("command"))
+                    .filter(value -> !value.trim().isEmpty())
+                    .map(value -> ResponseEntity.ok(smartCommandsMapper.mapToValidate(request)))
+                    .orElseGet(() -> ResponseEntity.badRequest().body(createErrorResponse("Command cannot be empty")));
         } catch (Exception e) {
             logger.error("Error validating command", e);
             return ResponseEntity.internalServerError()
@@ -200,11 +108,11 @@ public class CommandSuggestionController {
         }
     }
 
-    private Map<String, Object> createErrorResponse(String message) {
-        Map<String, Object> error = new HashMap<>();
-        error.put("error", true);
-        error.put("message", message);
-        error.put("timestamp", System.currentTimeMillis());
-        return error;
+    private BaseResponse createErrorResponse(String message) {
+        return BaseResponse.builder()
+                .error(Boolean.TRUE)
+                .message(message)
+                .timestamp(LocalDateTime.now())
+                .build();
     }
 }
