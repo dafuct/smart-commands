@@ -19,7 +19,7 @@ import com.smartcommands.repository.CommandHistoryRepository;
 @Service
 public class CommandProcessorService {
     private static final Logger logger = LoggerFactory.getLogger(CommandProcessorService.class);
-    private static final Pattern SMART_COMMAND_PATTERN = Pattern.compile("^sc\\s+['\"](.+?)['\"]\\s*$");
+    private static final Pattern SMART_COMMAND_PATTERN = Pattern.compile("^sc\\s+['\"](.*?)['\"]\\s*$");
     private static final int MAX_CONSECUTIVE_FAILURES = 3;
     private static final long CIRCUIT_BREAKER_RESET_TIME_MS = 60000;
 
